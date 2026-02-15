@@ -5,6 +5,7 @@ from odf.opendocument import OpenDocumentText
 from odf.text import P, H
 from odf.style import Style, TextProperties
 import io
+import json
 
 app = FastAPI()
 
@@ -28,14 +29,18 @@ app.add_middleware(
 @app.post("/generate-odt")
 async def generate_odt(payload: dict):
     try:
-        # Haal de geserialiseerde Craft.js data op
         craft_data = payload.get("data", {})
-        if not craft_data:
-            raise HTTPException(status_code=400, detail="Geen data ontvangen")
         
+        # Oplossing: Als craft_data per ongeluk als string binnenkomt, zet het om naar dict
+        if isinstance(craft_data, str):
+            craft_data = json.loads(craft_data)
+        
+        if not craft_data or not isinstance(craft_data, dict):
+            raise HTTPException(status_code=400, detail="Ongeldige data structuur")
+            
         doc = OpenDocumentText()
-
-        # Itereer door de nodes van het canvas
+        
+        # Nu kun je veilig over de items itereren
         for node_id, node in craft_data.items():
             component_name = node.get("type", {}).get("resolvedName")
             props = node.get("props", {})
