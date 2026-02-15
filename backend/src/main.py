@@ -1,15 +1,34 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from odf.opendocument import OpenDocumentText
-from odf.style import Style, TextProperties, ParagraphProperties, TableColumnProperties, TableCellProperties, TableProperties, TableRowProperties, PageLayout, PageLayoutProperties, MasterPage
+from odf.style import Style, TextProperties, ParagraphProperties, TableColumnProperties, TableCellProperties, TableProperties, TableRowProperties, PageLayout, PageLayoutProperties, MasterPage, GraphicProperties
 from odf.text import P, H, LineBreak
 from odf.table import Table, TableColumn, TableRow, TableCell
+from odf.draw import Frame, Image as DrawImage
 import io
 import json
 import re
+import base64
+import tempfile
+import urllib.request
+import os
+import shutil
+import uuid
 
 app = FastAPI()
+
+# --- CONFIG ---
+# Directory for storing uploaded images
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+IMAGES_DIR = os.path.join(STATIC_DIR, "images")
+
+os.makedirs(IMAGES_DIR, exist_ok=True)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # --- CORS CONFIGURATIE ---
 origins = [
@@ -29,6 +48,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    try:
+        file_ext = file.filename.split('.')[-1] if '.' in file.filename else "png"
+        filename = f"{uuid.uuid4()}.{file_ext}"
+        file_path = os.path.join(IMAGES_DIR, filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        return {"url": f"/static/images/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 def setup_page_layout(doc):
     """
     Define A4 Page Layout with standard margins to match frontend (20mm).
@@ -45,7 +78,7 @@ def setup_page_layout(doc):
     mp = MasterPage(name="Standard", pagelayoutname=pl)
     doc.masterstyles.addElement(mp)
 
-def add_style(doc, name, family, text_props=None, paragraph_props=None, table_col_props=None, table_cell_props=None, table_props=None, table_row_props=None):
+def add_style(doc, name, family, text_props=None, paragraph_props=None, table_col_props=None, table_cell_props=None, table_props=None, table_row_props=None, graphic_props=None):
     """
     Helper function to create and register an ODF style.
     """
@@ -62,6 +95,8 @@ def add_style(doc, name, family, text_props=None, paragraph_props=None, table_co
         style.addElement(TableProperties(**table_props))
     if table_row_props:
         style.addElement(TableRowProperties(**table_row_props))
+    if graphic_props:
+        style.addElement(GraphicProperties(**graphic_props))
     
     doc.automaticstyles.addElement(style)
     return name
@@ -109,11 +144,6 @@ def clean_and_add_text(element, html_text):
 
     # 6. Split and add to ODF
     lines = txt.split('\n')
-    
-    # Remove leading empty string if split caused one at start (optional, but cleaner)
-    # But usually <p>Text</p> -> \nText -> empty, Text. 
-    # Logic: If it starts with newline, we want a break? 
-    # Simpler: just iterate.
     
     for i, line in enumerate(lines):
         if i > 0:
@@ -233,10 +263,87 @@ def process_node(node_id, craft_data, parent_element, doc, context):
 
     # --- AFBEELDING ---
     elif resolved_name == "Afbeelding":
-        add_style(doc, style_name, "paragraph", paragraph_props={"textalign": "center", "marginbottom": "0.5cm"})
-        p = P(stylename=style_name)
-        p.addText("[AFBEELDING]")
-        parent_element.addElement(p)
+        src = props.get("src", "")
+        width_prop = props.get("width", "100%")
+        
+        if src:
+            try:
+                image_data = None
+                
+                # Check for local static file (from uploads)
+                # Matches paths like /static/images/xxx or full URL with /static/images/xxx
+                if "/static/images/" in src:
+                    # Extract filename part
+                    try:
+                        filename = src.split("/static/images/")[-1]
+                        local_path = os.path.join(IMAGES_DIR, filename)
+                        if os.path.exists(local_path):
+                            with open(local_path, "rb") as f:
+                                image_data = f.read()
+                    except Exception as e:
+                        print(f"Failed to load local image: {e}")
+
+                if image_data is None:
+                    if src.startswith("data:"):
+                        # Handle Data URI
+                        try:
+                            header, encoded = src.split(",", 1)
+                            image_data = base64.b64decode(encoded)
+                        except Exception:
+                            pass
+                    elif src.startswith("http"):
+                        # Handle URL
+                        try:
+                            with urllib.request.urlopen(src) as response:
+                                image_data = response.read()
+                        except Exception:
+                            pass
+                
+                if image_data:
+                    # Save to temp file for odfpy
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                        tmp.write(image_data)
+                        tmp_path = tmp.name
+                    
+                    # Register picture in ODF manifest
+                    uri = doc.addPicture(tmp_path)
+                    os.unlink(tmp_path) 
+
+                    # Create Graphic Style
+                    graphic_style_name = f"Graphic_{node_id}"
+                    graphic_props = {}
+                    
+                    if "%" in str(width_prop):
+                         graphic_props["relwidth"] = width_prop
+                    elif str(width_prop) == "auto":
+                         graphic_props["relwidth"] = "100%"
+                    
+                    add_style(doc, graphic_style_name, "graphic", graphic_props=graphic_props)
+
+                    # Create Frame and Image
+                    # anchortype='paragraph' means it flows with text.
+                    frame = Frame(stylename=graphic_style_name, anchortype="paragraph")
+                    img_element = DrawImage(href=uri)
+                    frame.addElement(img_element)
+                    
+                    # Wrap in Paragraph
+                    p_style_name = f"P_Img_{node_id}"
+                    add_style(doc, p_style_name, "paragraph", paragraph_props={"marginbottom": "0.5cm", "textalign": "center"})
+                    p = P(stylename=p_style_name)
+                    p.addElement(frame)
+                    parent_element.addElement(p)
+            except Exception as e:
+                print(f"Error adding image: {e}")
+                p = P()
+                p.addText("[Fout bij laden afbeelding]")
+                parent_element.addElement(p)
+        else:
+             # Placeholder if no src
+            p_style_name = f"P_Img_Empty_{node_id}"
+            add_style(doc, p_style_name, "paragraph", paragraph_props={"textalign": "center", "marginbottom": "0.5cm"})
+            p = P(stylename=p_style_name)
+            p.addText("[AFBEELDING]")
+            parent_element.addElement(p)
 
     # --- ROW (Table) ---
     elif resolved_name == "Row":
