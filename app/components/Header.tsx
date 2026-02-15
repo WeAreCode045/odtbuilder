@@ -10,7 +10,7 @@ export const Header: React.FC = () => {
   
   try {
     // Vervang dit door de URL van je Easypanel backend service
-    const BACKEND_URL = "https://backend-odt.jouwdomein.nl/generate-odt";
+    const BACKEND_URL = "https://odt-generator.code045.nl/generate-odt";
 
     const response = await fetch(BACKEND_URL, {
       method: "POST",
