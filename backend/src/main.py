@@ -7,6 +7,8 @@ from odf.opendocument import OpenDocumentText
 from odf.text import P, H
 from odf.style import Style, TextProperties
 import io
+import json
+import traceback
 
 app = FastAPI()
 
@@ -73,8 +75,13 @@ async def generate_odt(payload: dict):
         )
 
     except Exception as e:
-        print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("Error while generating ODT:")
+        traceback.print_exc()
+        try:
+            print("Payload dump:", json.dumps(payload))
+        except Exception:
+            print("Could not JSON-dump payload")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 if __name__ == "__main__":
     import uvicorn
