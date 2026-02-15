@@ -1,0 +1,9 @@
+{
+  "name": "odt-builder-monorepo",
+  "version": "1.0.0",
+  "scripts": {
+    "backend": "cd backend && venv/Scripts/activate && uvicorn src.main:app --reload --port 8000",
+    "frontend": "cd app && npm run dev",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  }
+}

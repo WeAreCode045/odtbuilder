@@ -10,7 +10,8 @@ app = FastAPI()
 
 # --- CORS CONFIGURATIE ---
 origins = [
-    "http://localhost:3003",        # Vite standaard poort (zie je vite.config.ts)
+    "http://localhost:3010",        # Vite standaard poort (zie je vite.config.ts)
+    ""
     "http://localhost:5173",        # Alternatieve Vite poort
     "https://odtbuilder.code045.nl", # Jouw live frontend URL
 ]
