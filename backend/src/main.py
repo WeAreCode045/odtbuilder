@@ -12,7 +12,7 @@ app = FastAPI()
 # Voeg hier de URL van je Easypanel frontend service toe
 origins = [
     "http://localhost:5173", # Voor lokaal testen met Vite
-    "https://app.jouwdomein.com", # Jouw live Easypanel frontend URL
+    "https://odtbuilder.code045.nl, # Jouw live Easypanel frontend URL
 ]
 
 app.add_middleware(
