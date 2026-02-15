@@ -24,8 +24,8 @@ RUN pip install --no-cache-dir -r src/requirements.txt
 # Copy backend code
 COPY . .
 
-# Copy built frontend from the builder stage into /app/public
-COPY --from=builder /build/app/public /app/public
+# Copy built frontend from the builder stage into /app/dist
+COPY --from=builder /build/app/dist /app/dist
 
 EXPOSE 80
 
