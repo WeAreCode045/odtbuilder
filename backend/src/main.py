@@ -9,10 +9,10 @@ import io
 app = FastAPI()
 
 # --- CORS CONFIGURATIE ---
-# Voeg hier de URL van je Easypanel frontend service toe
 origins = [
-    "http://localhost:5173", # Voor lokaal testen met Vite
-    "https://odtbuilder.code045.nl, # Jouw live Easypanel frontend URL
+    "http://localhost:3000",        # Vite standaard poort (zie je vite.config.ts)
+    "http://localhost:5173",        # Alternatieve Vite poort
+    "https://odtbuilder.code045.nl", # Jouw live frontend URL
 ]
 
 app.add_middleware(
@@ -46,8 +46,8 @@ async def generate_odt(payload: dict):
                 doc.text.addElement(P(text=props.get("text", "")))
             
             elif component_name == "GastInformatie":
-                # Verwerk de dynamische variabele
-                veld = props.get("veldtype", "firstname")
+                # Verander 'veldtype' naar 'field' zodat het matcht met je React code
+                veld = props.get("field", "firstname")
                 placeholder = f"$guest.{veld}"
                 doc.text.addElement(P(text=placeholder))
 
