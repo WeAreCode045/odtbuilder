@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from odf.opendocument import OpenDocumentText
 from odf.text import P, H
 from odf.style import Style, TextProperties
@@ -10,10 +12,9 @@ app = FastAPI()
 
 # --- CORS CONFIGURATIE ---
 origins = [
-    "http://localhost:3010",        # Vite standaard poort (zie je vite.config.ts)
-    ""
-    "http://localhost:5173",        # Alternatieve Vite poort
-    "https://odtbuilder.code045.nl", # Jouw live frontend URL
+    "http://localhost:3005",
+    "http://localhost:5173",
+    "https://odtbuilder.code045.nl",
 ]
 
 app.add_middleware(
@@ -23,6 +24,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Serve built frontend (app/public) if available ---
+root_dir = Path(__file__).resolve().parents[2]
+public_dir = root_dir / "app" / "public"
+if public_dir.exists():
+    app.mount("/", StaticFiles(directory=str(public_dir), html=True), name="frontend")
+else:
+    print(f"Warning: frontend build not found at {public_dir}. Run `npm run build` in the app folder.")
 
 @app.post("/generate-odt")
 async def generate_odt(payload: dict):
