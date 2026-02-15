@@ -1,32 +1,57 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from odf.opendocument import OpenDocumentText
-from odf.text import P
-import io
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from odf.opendocument import OpenDocumentText
+from odf.text import P, H
+from odf.style import Style, TextProperties
+import io
 
 app = FastAPI()
 
-# Het endpoint voor je React app
+# --- CORS CONFIGURATIE ---
+# Voeg hier de URL van je Easypanel frontend service toe
+origins = [
+    "http://localhost:5173", # Voor lokaal testen met Vite
+    "https://app.jouwdomein.com", # Jouw live Easypanel frontend URL
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.post("/generate-odt")
-async def generate_odt(craft_data: dict):
+async def generate_odt(payload: dict):
     try:
-        doc = OpenDocumentText()
+        # De data die Craft.js verstuurt via query.serialize()
+        craft_data = payload.get("data", {})
         
-        # Craft.js query.serialize() geeft een dictionary van nodes
+        doc = OpenDocumentText()
+
+        # Eenvoudige mapping van Craft.js nodes naar ODT
         for node_id, node in craft_data.items():
-            node_type = node.get("type", {}).get("resolvedName")
+            # Haal de naam van het component op
+            component_name = node.get("type", {}).get("resolvedName")
             props = node.get("props", {})
 
-            if node_type == "Tekst":
+            if component_name == "Titel":
+                # Voeg een kop toe
+                doc.text.addElement(H(outlinelevel=1, text=props.get("text", "Nieuwe Titel")))
+            
+            elif component_name == "Tekst":
+                # Voeg een paragraaf toe
                 doc.text.addElement(P(text=props.get("text", "")))
             
-            elif node_type == "GastInformatie":
+            elif component_name == "GastInformatie":
+                # Verwerk de dynamische variabele
                 veld = props.get("veldtype", "firstname")
-                # De output die in de ODT komt
-                doc.text.addElement(P(text=f"$guest.{veld}"))
+                placeholder = f"$guest.{veld}"
+                doc.text.addElement(P(text=placeholder))
 
-        # Maak het bestand in het geheugen
+        # Schrijf het document naar een buffer (geheugen)
         buffer = io.BytesIO()
         doc.save(buffer)
         buffer.seek(0)
@@ -36,5 +61,11 @@ async def generate_odt(craft_data: dict):
             media_type="application/vnd.oasis.opendocument.text",
             headers={"Content-Disposition": "attachment; filename=document.odt"}
         )
+
     except Exception as e:
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
