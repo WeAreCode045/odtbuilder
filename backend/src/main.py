@@ -3,10 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from odf.opendocument import OpenDocumentText
 from odf.style import Style, TextProperties, ParagraphProperties, TableColumnProperties, TableCellProperties, TableProperties, TableRowProperties, PageLayout, PageLayoutProperties, MasterPage
-from odf.text import P, H
+from odf.text import P, H, LineBreak
 from odf.table import Table, TableColumn, TableRow, TableCell
 import io
 import json
+import re
 
 app = FastAPI()
 
@@ -79,9 +80,51 @@ def clean_font_family(font_str):
     # Take first font, remove quotes
     return font_str.split(',')[0].replace('"', '').replace("'", "").strip()
 
-def process_node(node_id, craft_data, parent_element, doc):
+def clean_and_add_text(element, html_text):
+    """
+    Parses HTML content from ContentEditable and adds clean text with LineBreaks to ODF element.
+    """
+    if not html_text:
+        return
+
+    # Normalize HTML entities
+    txt = html_text.replace("&nbsp;", " ")
+    
+    # 1. Handle explicit empty lines from ContentEditable: <div><br></div> -> \n
+    txt = re.sub(r'<div>\s*<br\s*/?>\s*</div>', '\n', txt, flags=re.IGNORECASE)
+    
+    # 2. Handle simple breaks: <br> -> \n
+    txt = re.sub(r'<br\s*/?>', '\n', txt, flags=re.IGNORECASE)
+    
+    # 3. Handle block starts: <div> or <p> -> \n (implies new line/block)
+    # We use \n because we are inside a single ODF Paragraph object here.
+    txt = re.sub(r'<(div|p)[^>]*>', '\n', txt, flags=re.IGNORECASE)
+    
+    # 4. Strip closing tags and others
+    txt = re.sub(r'</(div|p)>', '', txt, flags=re.IGNORECASE)
+    txt = re.sub(r'<[^>]+>', '', txt)
+    
+    # 5. Unescape common entities
+    txt = txt.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"')
+
+    # 6. Split and add to ODF
+    lines = txt.split('\n')
+    
+    # Remove leading empty string if split caused one at start (optional, but cleaner)
+    # But usually <p>Text</p> -> \nText -> empty, Text. 
+    # Logic: If it starts with newline, we want a break? 
+    # Simpler: just iterate.
+    
+    for i, line in enumerate(lines):
+        if i > 0:
+            element.addElement(LineBreak())
+        if line:
+            element.addText(line)
+
+def process_node(node_id, craft_data, parent_element, doc, context):
     """
     Recursively processes a node, creates necessary styles, and appends ODF elements.
+    context: dict used to track state like page numbers.
     """
     node = craft_data.get(node_id)
     if not node:
@@ -92,15 +135,36 @@ def process_node(node_id, craft_data, parent_element, doc):
     props = node.get("props", {})
     children_ids = node.get("nodes", [])
 
-    if resolved_name in ["Document", "Page", "div", "Canvas"]:
+    # --- Structural Containers ---
+    if resolved_name in ["Document", "div", "Canvas"]:
         for child_id in children_ids:
-            process_node(child_id, craft_data, parent_element, doc)
+            process_node(child_id, craft_data, parent_element, doc, context)
         return
 
     style_name = f"Style_{node_id}"
 
+    # --- PAGE (Handles Page Breaks) ---
+    if resolved_name == "Page":
+        context["page_count"] += 1
+        
+        # If this is not the first page, insert a hard page break
+        if context["page_count"] > 1:
+            pb_style_name = f"PageBreak_{node_id}"
+            # Create a style that forces a page break before this paragraph
+            # We make the paragraph tiny/invisible so it doesn't affect layout
+            add_style(doc, pb_style_name, "paragraph", 
+                      paragraph_props={"breakbefore": "page", "margintop": "0cm", "marginbottom": "0cm", "lineheight": "0cm"},
+                      text_props={"fontsize": "0pt"}
+            )
+            p = P(stylename=pb_style_name)
+            parent_element.addElement(p)
+            
+        for child_id in children_ids:
+            process_node(child_id, craft_data, parent_element, doc, context)
+        return
+
     # --- TITEL (Header) ---
-    if resolved_name == "Titel":
+    elif resolved_name == "Titel":
         font_size_px = props.get("fontSize", 26)
         font_size_pt = px_to_pt(font_size_px)
         
@@ -124,7 +188,8 @@ def process_node(node_id, craft_data, parent_element, doc):
         add_style(doc, style_name, "paragraph", text_props=text_props, paragraph_props=para_props)
         
         h = H(outlinelevel=1, stylename=style_name)
-        h.addText(str(props.get("text", "Titel")))
+        # Clean HTML from ContentEditable and add
+        clean_and_add_text(h, str(props.get("text", "Titel")))
         parent_element.addElement(h)
 
     # --- TEKST (Paragraph) ---
@@ -147,13 +212,13 @@ def process_node(node_id, craft_data, parent_element, doc):
         para_props = {
             "textalign": align,
             "marginbottom": "0.2cm",
-            "lineheight": "115%" # 1.15 is standard web/doc spacing
+            "lineheight": "115%" 
         }
         
         add_style(doc, style_name, "paragraph", text_props=text_props, paragraph_props=para_props)
         
         p = P(stylename=style_name)
-        p.addText(str(props.get("text", "")))
+        clean_and_add_text(p, str(props.get("text", "")))
         parent_element.addElement(p)
 
     # --- GAST INFORMATIE ---
@@ -178,18 +243,16 @@ def process_node(node_id, craft_data, parent_element, doc):
         my = props.get("my", 2)
         margin_cm = f"{my * 0.1}cm"
         
-        # Table props: width matches printable area (21cm - 2*2cm margins = 17cm)
         table_props = {
             "margintop": margin_cm,
             "marginbottom": margin_cm,
             "width": "17cm",
-            "align": "center" # Centers the table itself
+            "align": "center"
         }
         
         add_style(doc, style_name, "table", table_props=table_props)
         table = Table(stylename=style_name)
 
-        # Identify Column children
         columns = []
         for cid in children_ids:
             cnode = craft_data.get(cid)
@@ -199,7 +262,6 @@ def process_node(node_id, craft_data, parent_element, doc):
         if not columns:
             return
 
-        # Create Column Styles (Widths)
         for i, col in enumerate(columns):
             col_width = col.get("props", {}).get("width", "auto")
             col_style_name = f"{style_name}_col_{i}"
@@ -211,25 +273,21 @@ def process_node(node_id, craft_data, parent_element, doc):
                     width_cm = (pct / 100) * 17.0
                     tcp["columnwidth"] = f"{width_cm}cm"
                 except:
-                    tcp["relcolumnwidth"] = "1*" # Fallback
+                    tcp["relcolumnwidth"] = "1*"
             else:
-                 # Distribute 'auto' columns equally or take remaining
                  tcp["relcolumnwidth"] = "1*"
             
             add_style(doc, col_style_name, "table-column", table_col_props=tcp)
             table.addElement(TableColumn(stylename=col_style_name))
 
-        # Create Row (with Min Height style)
         row_style_name = f"{style_name}_row"
-        # Match frontend min-h-[50px] approx 1.3cm
         add_style(doc, row_style_name, "table-row", table_row_props={"minrowheight": "1.32cm"})
         
         tr = TableRow(stylename=row_style_name)
         
         for i, col in enumerate(columns):
             padding = col.get("props", {}).get("padding", 8)
-            # Convert padding to cm (approx)
-            padding_cm = f"{padding * 0.026}cm" # 1px approx 0.026cm
+            padding_cm = f"{padding * 0.026}cm"
             
             cell_style_name = f"{style_name}_cell_{i}"
             
@@ -244,7 +302,7 @@ def process_node(node_id, craft_data, parent_element, doc):
             
             col_children = col.get("nodes", [])
             for child_id in col_children:
-                process_node(child_id, craft_data, cell, doc)
+                process_node(child_id, craft_data, cell, doc, context)
             
             if not cell.hasChildNodes():
                 cell.addElement(P())
@@ -255,13 +313,12 @@ def process_node(node_id, craft_data, parent_element, doc):
         parent_element.addElement(table)
 
     elif resolved_name == "Column":
-        # Fallback for columns not in row
         for child_id in children_ids:
-            process_node(child_id, craft_data, parent_element, doc)
+            process_node(child_id, craft_data, parent_element, doc, context)
     
     else:
         for child_id in children_ids:
-            process_node(child_id, craft_data, parent_element, doc)
+            process_node(child_id, craft_data, parent_element, doc, context)
 
 
 @app.post("/generate-odt")
@@ -278,8 +335,11 @@ async def generate_odt(payload: dict):
         doc = OpenDocumentText()
         setup_page_layout(doc)
         
+        # Initialize context to track page numbers
+        context = {"page_count": 0}
+
         if "ROOT" in craft_data:
-            process_node("ROOT", craft_data, doc.text, doc)
+            process_node("ROOT", craft_data, doc.text, doc, context)
         
         buffer = io.BytesIO()
         doc.save(buffer)
