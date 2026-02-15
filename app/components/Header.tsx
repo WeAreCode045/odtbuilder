@@ -306,10 +306,6 @@ export const Header: React.FC = () => {
                      } else if (el.tagName === "text:tab") {
                          currentText += "\t";
                      } else if (el.tagName === "text:span") {
-                        // Support for spans that might have different styles (e.g. bold in middle of text)
-                        // For now we just append text, but if the whole P has one style it works.
-                        // Complex span styling would require splitting Text component into smaller parts or using HTML content.
-                        // Currently our Tekst component uses one style for the whole block.
                         currentText += el.textContent || "";
                      } else {
                          currentText += el.textContent || "";
@@ -319,14 +315,45 @@ export const Header: React.FC = () => {
              flushText();
 
         } else if (tagName === "table:table") {
-            const rows = Array.from(xmlNode.getElementsByTagName("table:table-row"));
+            // Calculate Total Columns from table-column definitions
+            let totalColumns = 0;
+            // Use childNodes to only get direct children and avoid nested table columns
+            const columns = Array.from(xmlNode.childNodes).filter(
+                (n) => n.nodeType === 1 && (n as Element).tagName === "table:table-column"
+            ) as Element[];
+
+            for (const col of columns) {
+                const repeated = parseInt(col.getAttribute("table:number-columns-repeated") || "1");
+                totalColumns += repeated;
+            }
+
+            // Fallback: try to guess from the first row if no columns defined
+            if (totalColumns === 0) {
+                 const rows = Array.from(xmlNode.childNodes).filter(
+                    (n) => n.nodeType === 1 && (n as Element).tagName === "table:table-row"
+                 ) as Element[];
+                 
+                 if (rows.length > 0) {
+                     const firstRowCells = Array.from(rows[0].childNodes).filter(
+                        (n) => n.nodeType === 1 && ((n as Element).tagName === "table:table-cell" || (n as Element).tagName === "table:covered-table-cell")
+                     ) as Element[];
+                     
+                     for (const cell of firstRowCells) {
+                         const span = parseInt(cell.getAttribute("table:number-columns-spanned") || "1");
+                         totalColumns += span;
+                     }
+                 }
+            }
+            if (totalColumns === 0) totalColumns = 1;
+
+            const rows = Array.from(xmlNode.childNodes).filter(
+                (n) => n.nodeType === 1 && (n as Element).tagName === "table:table-row"
+            ) as Element[];
             
             for (const row of rows) {
                 const rowId = generateId();
-                // We set gap to 0 and margin-y (my) to 0 for imported tables 
-                // to mimic standard table layout (no gaps).
                 newNodes[rowId] = {
-                    type: { resolvedName: "Rij" },
+                    type: { resolvedName: "Row" },
                     isCanvas: true,
                     props: { gap: 0, my: 0 }, 
                     displayName: "Rij",
@@ -338,21 +365,67 @@ export const Header: React.FC = () => {
                 };
                 newNodes[parentId].nodes.push(rowId);
 
-                const cells = Array.from(row.children).filter(c => c.tagName === "table:table-cell");
+                const rowChildren = Array.from(row.childNodes).filter(
+                    (n) => n.nodeType === 1 && ((n as Element).tagName === "table:table-cell" || (n as Element).tagName === "table:covered-table-cell")
+                ) as Element[];
                 
-                for (const cell of cells) {
+                let skipCols = 0;
+
+                for (const cell of rowChildren) {
+                    // Handle cells covered by previous colspan in the SAME row
+                    if (skipCols > 0) {
+                        skipCols--;
+                        continue; 
+                    }
+
                     const colId = generateId();
+                    const tagName = cell.tagName;
+
+                    // Handle RowSpans (Vertical merges)
+                    // If we encounter a covered-table-cell and skipCols is 0, it means it's NOT covered by a horizontal span.
+                    // Therefore it must be covered by a vertical span (rowspan) from a previous row.
+                    // We render an empty column to maintain the grid layout.
+                    if (tagName === "table:covered-table-cell") {
+                        const widthPercent = (1 / totalColumns) * 100;
+                        newNodes[colId] = {
+                            type: { resolvedName: "Column" },
+                            isCanvas: true,
+                            props: { 
+                                width: `${widthPercent}%`,
+                                padding: 8 
+                            },
+                            displayName: "Kolom (Spanned)",
+                            custom: {},
+                            parent: rowId,
+                            hidden: false,
+                            nodes: [],
+                            linkedNodes: {}
+                        };
+                        newNodes[rowId].nodes.push(colId);
+                        
+                        // Check if this covered cell itself spans multiple columns (unlikely but possible in spec)
+                        // A covered cell can inherit the repetition of the original span if number-columns-repeated is used, 
+                        // but usually it's just one cell.
+                        continue;
+                    }
+
+                    // Handle Real Cells
+                    const colspan = parseInt(cell.getAttribute("table:number-columns-spanned") || "1");
                     
-                    // Parse cell specific style
+                    if (colspan > 1) {
+                        skipCols = colspan - 1;
+                    }
+
                     const cellStyleName = cell.getAttribute("table:style-name");
                     const cellStyle = cellStyleName ? styles[cellStyleName] || {} : {};
                     
+                    const widthPercent = (colspan / totalColumns) * 100;
+
                     newNodes[colId] = {
-                        type: { resolvedName: "Kolom" },
+                        type: { resolvedName: "Column" },
                         isCanvas: true,
                         props: { 
-                            width: "auto",
-                            // Fallback padding to 0 for imports to ensure no unwanted margins inside cells
+                            width: `${widthPercent}%`,
                             padding: cellStyle.padding !== undefined ? cellStyle.padding : 0 
                         },
                         displayName: "Kolom",
@@ -364,10 +437,12 @@ export const Header: React.FC = () => {
                     };
                     newNodes[rowId].nodes.push(colId);
 
-                    // Process cell content
-                    const cellChildren = Array.from(cell.children);
-                    for (const child of cellChildren) {
-                        await parseNode(child as Element, colId);
+                    // Recursively process cell content (supports nested tables)
+                    const cellContentChildren = Array.from(cell.childNodes);
+                    for (const child of cellContentChildren) {
+                        if (child.nodeType === 1) {
+                            await parseNode(child as Element, colId);
+                        }
                     }
                 }
             }

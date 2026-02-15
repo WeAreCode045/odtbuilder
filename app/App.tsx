@@ -22,8 +22,8 @@ const resolver = {
   Tekst,
   GastInformatie,
   Afbeelding,
-  Rij,
-  Kolom
+  Row: Rij,      // Map Rij component to 'Row' for export compatibility
+  Column: Kolom  // Map Kolom component to 'Column' for export compatibility
 };
 
 const App: React.FC = () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNode } from '@craftjs/core';
 
-export const Kolom = ({ children, width = 'auto', padding = 8 }: { children?: React.ReactNode, width: string, padding?: number }) => {
+export const Kolom = ({ children, width = 'auto', padding = 8, backgroundColor = 'transparent' }: { children?: React.ReactNode, width: string, padding?: number, backgroundColor?: string }) => {
     const { connectors: { connect, drag }, selected } = useNode((node) => ({
         selected: node.events.selected,
     }));
@@ -13,8 +13,9 @@ export const Kolom = ({ children, width = 'auto', padding = 8 }: { children?: Re
             style={{ 
                 width: width, 
                 flexGrow: width === 'auto' ? 1 : 0, 
-                flexShrink: 0,
-                padding: `${padding}px`
+                flexShrink: 1,
+                padding: `${padding}px`,
+                backgroundColor: backgroundColor
             }}
         >
             {children}
@@ -28,9 +29,10 @@ export const Kolom = ({ children, width = 'auto', padding = 8 }: { children?: Re
 };
 
 const KolomSettings = () => {
-     const { actions: { setProp }, width, padding } = useNode((node) => ({
+     const { actions: { setProp }, width, padding, backgroundColor } = useNode((node) => ({
         width: node.data.props.width,
-        padding: node.data.props.padding
+        padding: node.data.props.padding,
+        backgroundColor: node.data.props.backgroundColor
     }));
 
     return (
@@ -40,7 +42,7 @@ const KolomSettings = () => {
                 <select 
                     value={width}
                     onChange={(e) => setProp((props: any) => props.width = e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded text-sm bg-white"
+                    className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-700"
                 >
                     <option value="100%">100% (Volledig)</option>
                     <option value="75%">75% (3/4)</option>
@@ -57,8 +59,26 @@ const KolomSettings = () => {
                     type="number"
                     value={padding}
                     onChange={(e) => setProp((props: any) => props.padding = parseInt(e.target.value))}
-                    className="w-full p-2 border border-gray-300 rounded text-sm bg-white"
+                    className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-700"
                 />
+            </div>
+            <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-500">Achtergrondkleur</label>
+                <div className="flex gap-2">
+                    <input 
+                        type="color" 
+                        value={backgroundColor === 'transparent' ? '#ffffff' : backgroundColor} 
+                        onChange={(e) => setProp((props: any) => props.backgroundColor = e.target.value)}
+                        className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
+                    />
+                    <input 
+                        type="text" 
+                        value={backgroundColor} 
+                        onChange={(e) => setProp((props: any) => props.backgroundColor = e.target.value)}
+                        className="flex-1 p-2 border border-gray-300 rounded text-sm text-gray-700"
+                        placeholder="transparent"
+                    />
+                </div>
             </div>
         </div>
     );
@@ -69,6 +89,7 @@ Kolom.craft = {
     props: {
         width: 'auto',
         padding: 8,
+        backgroundColor: 'transparent'
     },
     related: {
         settings: KolomSettings,

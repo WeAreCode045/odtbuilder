@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNode } from '@craftjs/core';
 import ContentEditable from 'react-contenteditable';
-import { AlignLeft, AlignCenter, AlignRight, AlignJustify, Bold, Type } from 'lucide-react';
+import { AlignLeft, AlignCenter, AlignRight, AlignJustify, Bold, Italic, Underline, Type } from 'lucide-react';
 
 interface TekstProps {
   text: string;
@@ -30,11 +30,27 @@ export const Tekst = ({
     setEditableContent(text);
   }, [text]);
 
+  const execCmd = (cmd: string) => {
+      document.execCommand(cmd, false, undefined);
+  };
+
   return (
     <div 
       ref={(ref) => { if(ref) connect(drag(ref)) }} 
-      className={`w-full mb-2 p-1 ${selected ? 'outline outline-2 outline-blue-400' : 'hover:outline hover:outline-1 hover:outline-blue-200'}`}
+      className={`w-full relative mb-2 ${selected ? 'outline outline-2 outline-blue-400 z-10' : 'hover:outline hover:outline-1 hover:outline-blue-200'}`}
     >
+      {selected && (
+          <div className="absolute -top-10 left-0 bg-gray-800 text-white rounded-md shadow-lg flex items-center gap-1 p-1 z-50">
+              <button onClick={(e) => { e.preventDefault(); execCmd('bold'); }} className="p-1.5 hover:bg-gray-700 rounded" title="Bold"><Bold size={14}/></button>
+              <button onClick={(e) => { e.preventDefault(); execCmd('italic'); }} className="p-1.5 hover:bg-gray-700 rounded" title="Italic"><Italic size={14}/></button>
+              <button onClick={(e) => { e.preventDefault(); execCmd('underline'); }} className="p-1.5 hover:bg-gray-700 rounded" title="Underline"><Underline size={14}/></button>
+              <div className="w-px h-4 bg-gray-600 mx-1"></div>
+              <button onClick={() => setProp((p: any) => p.textAlign = 'left')} className={`p-1.5 hover:bg-gray-700 rounded ${textAlign === 'left' ? 'bg-gray-700' : ''}`}><AlignLeft size={14}/></button>
+              <button onClick={() => setProp((p: any) => p.textAlign = 'center')} className={`p-1.5 hover:bg-gray-700 rounded ${textAlign === 'center' ? 'bg-gray-700' : ''}`}><AlignCenter size={14}/></button>
+              <button onClick={() => setProp((p: any) => p.textAlign = 'right')} className={`p-1.5 hover:bg-gray-700 rounded ${textAlign === 'right' ? 'bg-gray-700' : ''}`}><AlignRight size={14}/></button>
+          </div>
+      )}
+
       <ContentEditable
         html={editableContent}
         disabled={!selected}
@@ -42,7 +58,8 @@ export const Tekst = ({
             setEditableContent(e.target.value);
             setProp((props: TekstProps) => props.text = e.target.value, 500);
         }}
-        tagName="p"
+        tagName="div"
+        className="p-1 min-h-[1.5em]"
         style={{ 
           fontSize: `${fontSize}px`, 
           color: color, 
@@ -58,10 +75,9 @@ export const Tekst = ({
 };
 
 const TekstSettings = () => {
-  const { actions: { setProp }, fontSize, color, textAlign, fontFamily, fontWeight } = useNode((node) => ({
+  const { actions: { setProp }, fontSize, color, fontFamily, fontWeight } = useNode((node) => ({
     fontSize: node.data.props.fontSize,
     color: node.data.props.color,
-    textAlign: node.data.props.textAlign,
     fontFamily: node.data.props.fontFamily,
     fontWeight: node.data.props.fontWeight,
   }));
@@ -74,7 +90,7 @@ const TekstSettings = () => {
           type="number" 
           value={fontSize} 
           onChange={(e) => setProp((props: TekstProps) => props.fontSize = parseInt(e.target.value, 10))}
-          className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500"
+          className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-gray-700"
         />
       </div>
 
@@ -83,7 +99,7 @@ const TekstSettings = () => {
         <select
           value={fontFamily}
           onChange={(e) => setProp((props: TekstProps) => props.fontFamily = e.target.value)}
-          className="w-full p-2 border border-gray-300 rounded text-sm bg-white"
+          className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-700"
         >
             <option value="inherit">Standaard</option>
             <option value="Arial, sans-serif">Arial</option>
@@ -95,19 +111,6 @@ const TekstSettings = () => {
       </div>
 
        <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-500">Dikte</label>
-        <div className="flex items-center gap-2">
-            <button
-                onClick={() => setProp((props: TekstProps) => props.fontWeight = props.fontWeight === 'bold' ? 'normal' : 'bold')}
-                className={`p-2 rounded border ${fontWeight === 'bold' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-300 text-gray-600'}`}
-            >
-                <Bold size={16} />
-            </button>
-            <span className="text-xs text-gray-400">{fontWeight === 'bold' ? 'Vetgedrukt' : 'Normaal'}</span>
-        </div>
-      </div>
-
-       <div className="flex flex-col gap-1">
         <label className="text-xs text-gray-500">Tekstkleur</label>
         <div className="flex gap-2">
             <input 
@@ -116,26 +119,6 @@ const TekstSettings = () => {
                 onChange={(e) => setProp((props: TekstProps) => props.color = e.target.value)}
                 className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
             />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-500">Uitlijning</label>
-        <div className="flex rounded border border-gray-300 overflow-hidden bg-white">
-            {[
-                { val: 'left', icon: <AlignLeft size={14}/> }, 
-                { val: 'center', icon: <AlignCenter size={14}/> }, 
-                { val: 'right', icon: <AlignRight size={14}/> },
-                { val: 'justify', icon: <AlignJustify size={14}/> }
-            ].map((opt) => (
-                <button
-                    key={opt.val}
-                    onClick={() => setProp((props: TekstProps) => props.textAlign = opt.val as any)}
-                    className={`flex-1 py-2 flex items-center justify-center hover:bg-gray-50 ${textAlign === opt.val ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}
-                >
-                    {opt.icon}
-                </button>
-            ))}
         </div>
       </div>
     </div>

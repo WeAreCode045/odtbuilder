@@ -73,7 +73,7 @@ const TitelSettings = () => {
           type="number" 
           value={fontSize} 
           onChange={(e) => setProp((props: TitelProps) => props.fontSize = parseInt(e.target.value, 10))}
-          className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500"
+          className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 text-gray-700"
         />
       </div>
 
@@ -82,7 +82,7 @@ const TitelSettings = () => {
         <select
           value={fontFamily}
           onChange={(e) => setProp((props: TitelProps) => props.fontFamily = e.target.value)}
-          className="w-full p-2 border border-gray-300 rounded text-sm bg-white"
+          className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-700"
         >
             <option value="inherit">Standaard</option>
             <option value="Arial, sans-serif">Arial</option>
@@ -119,7 +119,7 @@ const TitelSettings = () => {
                 type="text" 
                 value={color}
                 onChange={(e) => setProp((props: TitelProps) => props.color = e.target.value)}
-                className="flex-1 p-2 border border-gray-300 rounded text-sm uppercase"
+                className="flex-1 p-2 border border-gray-300 rounded text-sm uppercase text-gray-700"
             />
         </div>
       </div>

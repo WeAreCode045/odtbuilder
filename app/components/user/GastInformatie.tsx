@@ -46,7 +46,7 @@ const GastInfoSettings = () => {
         <select
             value={field}
             onChange={(e) => setProp((props: GastInfoProps) => props.field = e.target.value as any)}
-            className="w-full p-2 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:border-blue-500"
+            className="w-full p-2 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:border-blue-500 text-gray-700"
         >
             <option value="firstname">Voornaam</option>
             <option value="lastname">Achternaam</option>
