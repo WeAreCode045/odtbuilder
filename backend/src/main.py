@@ -1,12 +1,22 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from odf.opendocument import OpenDocumentText
 from odf.text import P, H
 from odf.style import Style, TextProperties
 import io
 
 app = FastAPI()
+
+# --- Serve built frontend (app/public) if available ---
+root_dir = Path(__file__).resolve().parents[2]
+public_dir = root_dir / "app" / "public"
+if public_dir.exists():
+    app.mount("/", StaticFiles(directory=str(public_dir), html=True), name="frontend")
+else:
+    print(f"Warning: frontend build not found at {public_dir}. Run `npm run build` in the app folder and copy output to /public.`")
 
 # --- CORS CONFIGURATIE ---
 origins = [

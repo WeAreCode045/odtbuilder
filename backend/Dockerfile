@@ -1,14 +1,33 @@
-# Gebruik een officiële Python image
-FROM python:3.11-slim
+# --- Builder: build the frontend using Node ---
+FROM node:20-bullseye-slim AS builder
+WORKDIR /build/app
 
-# Zet de werkmap
+# Copy only package files first for better caching
+COPY ../app/package*.json ./
+COPY ../app/vite.config.ts ./
+COPY ../app/tsconfig.json ./
+
+# Copy the rest of the frontend sources
+COPY ../app/ ./
+
+RUN npm ci --prefer-offline --no-audit --progress=false
+RUN npm run build
+
+# --- Runtime: Python API image ---
+FROM python:3.11-slim
 WORKDIR /app
 
-# Installeer de benodigde systeem-packages en odfpy
-RUN pip install --no-cache-dir odfpy fastapi uvicorn
+# Install Python dependencies from the repo
+COPY src/requirements.txt ./src/requirements.txt
+RUN pip install --no-cache-dir -r src/requirements.txt
 
-# Kopieer je code
+# Copy backend code
 COPY . .
 
-# Start je API
+# Copy built frontend from the builder stage into /app/public
+COPY --from=builder /build/app/public /app/public
+
+EXPOSE 80
+
+# Start the API
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "80"]
