@@ -1,22 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 from odf.opendocument import OpenDocumentText
 from odf.text import P, H
 from odf.style import Style, TextProperties
 import io
-import json
-import traceback
 
 app = FastAPI()
 
 # --- CORS CONFIGURATIE ---
+# Hersteld: Afsluitend aanhalingsteken toegevoegd en poorten uitgebreid
 origins = [
-    "http://localhost:3005",
+    "http://localhost:3000",
     "http://localhost:5173",
     "https://odtbuilder.code045.nl",
+    "https://odt-generator.code045.nl",
 ]
 
 app.add_middleware(
@@ -27,43 +25,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Serve built frontend (app/public) if available ---
-root_dir = Path(__file__).resolve().parents[2]
-public_dir = root_dir / "app" / "public"
-if public_dir.exists():
-    app.mount("/", StaticFiles(directory=str(public_dir), html=True), name="frontend")
-else:
-    print(f"Warning: frontend build not found at {public_dir}. Run `npm run build` in the app folder.")
-
 @app.post("/generate-odt")
 async def generate_odt(payload: dict):
     try:
-        # De data die Craft.js verstuurt via query.serialize()
+        # Haal de geserialiseerde Craft.js data op
         craft_data = payload.get("data", {})
+        if not craft_data:
+            raise HTTPException(status_code=400, detail="Geen data ontvangen")
         
         doc = OpenDocumentText()
 
-        # Eenvoudige mapping van Craft.js nodes naar ODT
+        # Itereer door de nodes van het canvas
         for node_id, node in craft_data.items():
-            # Haal de naam van het component op
             component_name = node.get("type", {}).get("resolvedName")
             props = node.get("props", {})
 
+            # Verwerk Titels
             if component_name == "Titel":
-                # Voeg een kop toe
-                doc.text.addElement(H(outlinelevel=1, text=props.get("text", "Nieuwe Titel")))
+                text_content = props.get("text") or "Titel"
+                doc.text.addElement(H(outlinelevel=1, text=text_content))
             
+            # Verwerk Tekstblokken
             elif component_name == "Tekst":
-                # Voeg een paragraaf toe
-                doc.text.addElement(P(text=props.get("text", "")))
+                text_content = props.get("text") or ""
+                doc.text.addElement(P(text=text_content))
             
+            # Verwerk Gast Informatie
             elif component_name == "GastInformatie":
-                # Verander 'veldtype' naar 'field' zodat het matcht met je React code
+                # Gecorrigeerd: gebruik 'field' in plaats van 'veldtype' om te matchen met GastInformatie.tsx
                 veld = props.get("field", "firstname")
                 placeholder = f"$guest.{veld}"
                 doc.text.addElement(P(text=placeholder))
 
-        # Schrijf het document naar een buffer (geheugen)
+        # Schrijf het resultaat naar een buffer in het geheugen
         buffer = io.BytesIO()
         doc.save(buffer)
         buffer.seek(0)
@@ -71,18 +65,18 @@ async def generate_odt(payload: dict):
         return StreamingResponse(
             buffer,
             media_type="application/vnd.oasis.opendocument.text",
-            headers={"Content-Disposition": "attachment; filename=document.odt"}
+            headers={
+                "Content-Disposition": "attachment; filename=document.odt",
+                "Access-Control-Expose-Headers": "Content-Disposition"
+            }
         )
 
     except Exception as e:
-        print("Error while generating ODT:")
-        traceback.print_exc()
-        try:
-            print("Payload dump:", json.dumps(payload))
-        except Exception:
-            print("Could not JSON-dump payload")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        # Log de fout op de server voor debugging
+        print(f"Server Error tijdens ODT generatie: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Poort 80 voor Easypanel/Docker
+    uvicorn.run(app, host="0.0.0.0", port=80)
