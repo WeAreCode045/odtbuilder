@@ -10,13 +10,10 @@ export const Document = ({ children }: { children?: React.ReactNode }) => {
   const handleAddPage = () => {
     // We can create a fresh Element for a Page
     // Note: In Craft.js, we usually add Nodes. 
-    // We use `createNode` helper implicitly by passing the JSX Element to `add`.
+    // We need to parse the React Element into a NodeTree before adding.
+    const node = query.parseReactElement(<Element is={Page} canvas />).toNodeTree();
     
-    // We need to define the Page structure to add. 
-    // Since Page is a canvas itself, we just add the Element.
-    const newPage = <Element is={Page} canvas />;
-    
-    actions.add(newPage, id);
+    actions.addNodeTree(node, id);
   };
 
   return (

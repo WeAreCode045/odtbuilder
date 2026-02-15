@@ -12,7 +12,9 @@ app = FastAPI()
 # --- CORS CONFIGURATIE ---
 # Hersteld: Afsluitend aanhalingsteken toegevoegd en poorten uitgebreid
 origins = [
-    "http://localhost:3000",
+    "http://localhost:3010",
+    "http://localhost:3011",
+    "https://docubuild-a4-889067085922.us-west1.run.app",
     "http://localhost:5173",
     "https://odtbuilder.code045.nl",
     "https://odt-generator.code045.nl",
@@ -42,25 +44,28 @@ async def generate_odt(payload: dict):
         
         # Nu kun je veilig over de items itereren
         for node_id, node in craft_data.items():
-            component_name = node.get("type", {}).get("resolvedName")
-            props = node.get("props", {})
+            try:
+                component_name = node.get("type", {}).get("resolvedName")
+                props = node.get("props", {})
 
-            # Verwerk Titels
-            if component_name == "Titel":
-                text_content = props.get("text") or "Titel"
-                doc.text.addElement(H(outlinelevel=1, text=text_content))
-            
-            # Verwerk Tekstblokken
-            elif component_name == "Tekst":
-                text_content = props.get("text") or ""
-                doc.text.addElement(P(text=text_content))
-            
-            # Verwerk Gast Informatie
-            elif component_name == "GastInformatie":
-                # Gecorrigeerd: gebruik 'field' in plaats van 'veldtype' om te matchen met GastInformatie.tsx
-                veld = props.get("field", "firstname")
-                placeholder = f"$guest.{veld}"
-                doc.text.addElement(P(text=placeholder))
+                # Verwerk Titels
+                if component_name == "Titel":
+                    text_content = props.get("text") or "Titel"
+                    doc.text.addElement(H(outlinelevel=1, text=str(text_content)))
+                
+                # Verwerk Tekstblokken
+                elif component_name == "Tekst":
+                    text_content = props.get("text") or ""
+                    doc.text.addElement(P(text=str(text_content)))
+                
+                # Verwerk Gast Informatie
+                elif component_name == "GastInformatie":
+                    veld = props.get("field", "firstname")
+                    placeholder = f"$guest.{veld}"
+                    doc.text.addElement(P(text=placeholder))
+            except Exception as node_err:
+                print(f"Error processing node {node_id} ({component_name}): {node_err}")
+                continue # Ga door met de rest van het document
 
         # Schrijf het resultaat naar een buffer in het geheugen
         buffer = io.BytesIO()

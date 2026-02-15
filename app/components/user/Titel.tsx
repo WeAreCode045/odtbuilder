@@ -1,15 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useNode } from '@craftjs/core';
 import ContentEditable from 'react-contenteditable';
+import { Bold } from 'lucide-react';
 
 interface TitelProps {
   text: string;
   fontSize: number;
   color: string;
   textAlign: 'left' | 'center' | 'right';
+  fontFamily: string;
+  fontWeight: string;
 }
 
-export const Titel = ({ text, fontSize, color, textAlign }: TitelProps) => {
+export const Titel = ({ 
+  text, 
+  fontSize, 
+  color, 
+  textAlign,
+  fontFamily = 'inherit',
+  fontWeight = 'bold'
+}: TitelProps) => {
   const { connectors: { connect, drag }, actions: { setProp }, selected } = useNode((node) => ({
       selected: node.events.selected,
   }));
@@ -34,17 +44,25 @@ export const Titel = ({ text, fontSize, color, textAlign }: TitelProps) => {
             setProp((props: TitelProps) => props.text = e.target.value, 500);
         }}
         tagName="h2"
-        style={{ fontSize: `${fontSize}px`, color: color, fontWeight: 'bold', outline: 'none' }}
+        style={{ 
+          fontSize: `${fontSize}px`, 
+          color: color, 
+          fontWeight: fontWeight, 
+          fontFamily: fontFamily, 
+          outline: 'none' 
+        }}
       />
     </div>
   );
 };
 
 const TitelSettings = () => {
-  const { actions: { setProp }, fontSize, color, textAlign } = useNode((node) => ({
+  const { actions: { setProp }, fontSize, color, textAlign, fontFamily, fontWeight } = useNode((node) => ({
     fontSize: node.data.props.fontSize,
     color: node.data.props.color,
     textAlign: node.data.props.textAlign,
+    fontFamily: node.data.props.fontFamily,
+    fontWeight: node.data.props.fontWeight,
   }));
 
   return (
@@ -57,6 +75,35 @@ const TitelSettings = () => {
           onChange={(e) => setProp((props: TitelProps) => props.fontSize = parseInt(e.target.value, 10))}
           className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500"
         />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-gray-500">Font Familie</label>
+        <select
+          value={fontFamily}
+          onChange={(e) => setProp((props: TitelProps) => props.fontFamily = e.target.value)}
+          className="w-full p-2 border border-gray-300 rounded text-sm bg-white"
+        >
+            <option value="inherit">Standaard</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Times New Roman, serif">Times New Roman</option>
+            <option value="Courier New, monospace">Courier New</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+        </select>
+      </div>
+
+       <div className="flex flex-col gap-1">
+        <label className="text-xs text-gray-500">Dikte</label>
+        <div className="flex items-center gap-2">
+            <button
+                onClick={() => setProp((props: TitelProps) => props.fontWeight = props.fontWeight === 'bold' ? 'normal' : 'bold')}
+                className={`p-2 rounded border ${fontWeight === 'bold' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-300 text-gray-600'}`}
+            >
+                <Bold size={16} />
+            </button>
+            <span className="text-xs text-gray-400">{fontWeight === 'bold' ? 'Vetgedrukt' : 'Normaal'}</span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -102,6 +149,8 @@ Titel.craft = {
     fontSize: 26,
     color: '#1a202c',
     textAlign: 'left',
+    fontFamily: 'inherit',
+    fontWeight: 'bold',
   },
   related: {
     settings: TitelSettings,

@@ -2,8 +2,11 @@
   "name": "odt-builder-monorepo",
   "version": "1.0.0",
   "scripts": {
-    "backend": "cd backend && venv/Scripts/activate && uvicorn src.main:app --reload --port 8000",
+    "backend": "cd backend && python3 -m uvicorn src.main:app --reload --port 8100",
     "frontend": "cd app && npm run dev",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

@@ -11,6 +11,9 @@ import { Page } from './components/user/Page';
 import { Titel } from './components/user/Titel';
 import { Tekst } from './components/user/Tekst';
 import { GastInformatie } from './components/user/GastInformatie';
+import { Afbeelding } from './components/user/Afbeelding';
+import { Rij } from './components/user/Rij';
+import { Kolom } from './components/user/Kolom';
 
 const resolver = {
   Document,
@@ -18,6 +21,9 @@ const resolver = {
   Titel,
   Tekst,
   GastInformatie,
+  Afbeelding,
+  Rij,
+  Kolom
 };
 
 const App: React.FC = () => {
