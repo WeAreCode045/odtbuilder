@@ -1,0 +1,5 @@
+{
+  "name": "DocuBuild A4",
+  "description": "A visual A4 document builder using React, Craft.js, and Tailwind CSS.",
+  "requestFramePermissions": []
+}
