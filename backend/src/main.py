@@ -34,7 +34,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 origins = [
     "http://localhost:3010",
     "http://localhost:3011",
-    "https://docubuild-a4-889067085922.us-west1.run.app",
     "http://localhost:5173",
     "https://odtbuilder.code045.nl",
     "https://odt-generator.code045.nl",
