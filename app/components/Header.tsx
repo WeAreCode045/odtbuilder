@@ -1,3 +1,10 @@
+import React from 'react';
+import { useEditor } from '@craftjs/core';
+import { Download, FileText } from 'lucide-react';
+
+export const Header: React.FC = () => {
+  const { query } = useEditor();
+
 const handleExport = async () => {
   const json = query.serialize();
   
